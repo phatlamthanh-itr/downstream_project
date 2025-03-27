@@ -37,6 +37,5 @@ if __name__ == "__main__":
     data = np.load(os.path.join(data_path, f"all_ecgs_subseq.npy"))
     config.set_inputdims(data.shape[-1])
     rebar_model = import_model(config, reload_ckpt = True)
-
-
-    clustering(rebar_model, data= data, save_path= "")
+    #os.system('cls' if os.name == 'nt' else 'clear')
+    clustering(rebar_model, data= data)
