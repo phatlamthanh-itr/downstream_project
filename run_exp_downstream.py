@@ -35,8 +35,9 @@ if __name__ == "__main__":
 # ==================== RUN DOWNSTREAM TASKS ==============================
 
     # Load dataset for downstream tasks segmentation
-    train_data, train_labels, val_data, val_labels, _, _  = load_data(config = config, data_type = "subseq", label_size=downstream_config.label_size, downstream=True)
     model = import_model(config, reload_ckpt = True)
+    exit()
+    train_data, train_labels, val_data, val_labels, _, _  = load_data(config = config, data_type = "subseq", label_size=downstream_config.label_size, downstream=True)
 
     run_dir = model.run_dir
 

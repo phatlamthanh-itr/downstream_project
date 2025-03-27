@@ -74,16 +74,16 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
             else:
                 padded_labels[sample[i] - OFFSET_SAMPLE // 2: sample[i] + OFFSET_SAMPLE // 2] = is_beat(l)
 
-        # padded_labels = padded_labels[sample[0]:]
-        # Post-processing (make sure min_distance between two peaks greater than 0.4 s)
+        padded_labels = padded_labels[sample[0]:]
+        #Post-processing (make sure min_distance between two peaks greater than 0.4 s)
         # padded_labels = enforce_min_spacing(padded_labels=padded_labels, min_distance=round(0.4 * SAMPLING_RATE))
         
-        # Plot ECG (optional)
-        # check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000], [250000, 300000]]
-        # for range in check_ranges:
-        #     print("Plotting ECG for " + record_id, range)
-        #     plot_ecg_predictions(filtered_waveform=filtered_waveform[range[0]:range[1],:], val_labels=padded_labels[range[0]:range[1]], val_predictions=padded_labels[range[0]:range[1]], record_id=record_id)
-        
+        #Plot ECG (optional)
+        check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000], [250000, 300000]]
+        for range in check_ranges:
+            print("Plotting ECG for " + record_id, range)
+            plot_ecg_predictions(filtered_waveform=filtered_waveform[range[0]:range[1],:], val_labels=padded_labels[range[0]:range[1]], val_predictions=padded_labels[range[0]:range[1]], record_id=record_id)
+        exit()
         all_labels.append(padded_labels)
         all_ecgs.append(filtered_waveform[:,:].T)
         all_names.append(record_id)

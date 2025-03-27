@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchsummary import summary
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 
