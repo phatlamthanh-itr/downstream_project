@@ -34,7 +34,9 @@ if __name__ == "__main__":
         model = import_model(config, train_data=train_data, val_data=val_data)
         model.fit()
 
-    data = np.load(os.path.join(data_path, f"all_ecgs_subseq.npy"))
+    # data = np.load(os.path.join(data_path, f"all_ecgs_subseq.npy"))
+    data = np.load(os.path.join(data_path, f"all_ecgs_subseq_strip2.npy"))
+    data = data[:4000,:, [0, 1]] # chon chanel thu 0 va 2
     config.set_inputdims(data.shape[-1])
     rebar_model = import_model(config, reload_ckpt = True)
     #os.system('cls' if os.name == 'nt' else 'clear')

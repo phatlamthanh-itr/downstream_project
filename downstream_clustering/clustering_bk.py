@@ -61,14 +61,14 @@ def plot_clustering(data, labels, title='Clustering visualization with t-SNE'):
     n_clusters = len(unique_labels)
 
     # Tạo colormap dựa trên số lượng cụm
-    # colors = plt.cm.get_cmap('tab10', n_clusters)
-    colors = ['blue', 'red']
+    colors = plt.cm.get_cmap('tab10', n_clusters)
+
     plt.figure(figsize=(8, 6))
     # Vẽ từng cụm với màu sắc riêng
     for i, label in enumerate(unique_labels):
         cluster_points = reduced_data[labels == label]
         plt.scatter(cluster_points[:, 0], cluster_points[:, 1], 
-                    color=colors[i], label=f'Cluster {label}', alpha=0.6)
+                    color=colors(i), label=f'Cluster {label}', alpha=0.6)
     
     plt.title(title)
     plt.xlabel('t-SNE Component 1')
@@ -80,9 +80,11 @@ def plot_clustering(data, labels, title='Clustering visualization with t-SNE'):
 def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/", k = None, reencode = False):
     #Using REBAR model to encode data
     name_pth_file = f"{NAME_PTH_FILE}.pth"
+    print(name_pth_file)
     if reencode or not os.path.exists(os.path.join(save_path, name_pth_file)):
         data_encoded = rebar_model.encode(data)
         torch.save(data_encoded, os.path.join(save_path, name_pth_file), pickle_protocol=4)
+        print("-------------------------------------", data_encoded.shape, data)
         print(f"Encode and save data to {os.path.join(save_path, name_pth_file)} successfully!")
     else:
         data_encoded = torch.load(os.path.join(save_path, name_pth_file), weights_only=False)
@@ -115,7 +117,7 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
         else:
             print("Fitting MiniBatch KMEANs model...")
             pipeline = Pipeline([   
-                ('kmeans', MiniBatchKMeans(n_clusters=2, random_state=42, n_init= 10, batch_size=384)) 
+                ('kmeans', MiniBatchKMeans(n_clusters=2, random_state=42, n_init= 10, batch_size=1024)) 
             ])
             pipeline.fit(data_encoded)
             os.makedirs('./experiments/out/cluster/minibatchkmeans', exist_ok=True)

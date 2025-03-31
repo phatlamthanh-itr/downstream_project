@@ -6,6 +6,7 @@ import numpy as np
 import wfdb
 import neurokit2 as nk
 from data.process.dataset_config import SAMPLING_RATE
+from downstream_clustering.clustering_config import RECORD_IDS
 from wfdb.processing import resample_multichan
 from data.process.preprocessing import is_beat, butter_bandpass_filter, change_resolution_labels, change_resolution_labels_with_peaks
 from scipy.signal import resample
@@ -13,7 +14,9 @@ from scipy.signal import resample
 def main():
     # the repo designed to have files live in /rebar/data/ecg/
     downloadextract_ECGfiles()
-    preprocess_ECGdata(change_resolution=False)
+    # preprocess_ECGdata(change_resolution=False)
+    # preprocess_ECG(change_resolution=False)
+    preprocess_ECG_from_strip2()
 
 def downloadextract_ECGfiles(zippath="data/ecg.zip", targetpath="data/ecg_clustering", redownload=False):
     if os.path.exists(targetpath) and redownload == False:
@@ -29,6 +32,80 @@ def downloadextract_ECGfiles(zippath="data/ecg.zip", targetpath="data/ecg_cluste
         zip_ref.extractall(targetpath)
     os.remove(zippath)
     print("Done extracting and downloading")
+
+def preprocess_ECG_from_strip2(path = "data/strip2", processedecgpath="data/ecg_clustering/processed"):
+    print("Processing ECG data from strip2...")
+
+    all_ecgs = []
+    all_names = []
+    count = 0
+    if os.path.exists(os.path.join(processedecgpath, "all_ecgs_strip2.npy")):
+        all_ecgs = np.load(os.path.join(processedecgpath, "all_ecgs_strip2.npy"), allow_pickle=True)
+    else:
+        for all_dir in tqdm(sorted(os.listdir(path)), desc="Processing main dirs"):
+            for dir in sorted(os.listdir(os.path.join(path, all_dir))):
+                if count >= 30000:
+                    break
+                try:
+                    record_ids = [file.split('.')[0] for file in os.listdir(os.path.join(path, os.path.join(all_dir, dir))) if '.dat' in file]
+                    record_path = os.path.join(path, os.path.join(all_dir, os.path.join(dir, f"{record_ids[0]}")))
+
+                    record = wfdb.rdrecord(record_path)
+                    waveform = record.__dict__['p_signal']
+
+                    # Resample waveform
+                    fs = record.fs 
+                    if fs != SAMPLING_RATE:
+                        num_samples = int(waveform.shape[0] * (SAMPLING_RATE / fs))  
+                        waveform = resample(waveform, num_samples)
+
+                    # Apply filters
+                    filtered_waveform = butter_bandpass_filter(waveform)
+                    
+                    # Normalize
+                    filtered_waveform = filtered_waveform - np.mean(filtered_waveform, axis=0)
+                    filtered_waveform = filtered_waveform / np.std(filtered_waveform, axis=0)
+                    nan_count = np.isnan(filtered_waveform).sum()
+                    if filtered_waveform.shape[0] >= 15000 and filtered_waveform.shape[1] == 3:
+                        if nan_count == 0:
+                            all_ecgs.append(filtered_waveform[:,:].T) #shape: (15000, 3) -> (3, 15000)
+                            all_names.append(record_ids[0])
+                            count += 1
+                        else:
+                            print("NaN")
+                    else:
+                        print(filtered_waveform.shape)
+                except:
+                    continue
+
+    all_names = np.array(all_names)
+    min_signal_lens = min([sig.shape[1] for sig in all_ecgs])
+    print("min_signal_lens: ", min_signal_lens)
+    all_ecgs = np.array([sig[:,:min_signal_lens] for sig in tqdm(all_ecgs)]) # lay lai cung mot do dai nho nhat
+
+    # Normalize ecgs and changes it to be batch, time, channel
+    all_ecgs = denoiseECG(all_ecgs) # shape
+    print("All ECG: ", all_ecgs.shape)
+    print("Denoise and Normalize completed!")
+
+    # # Save ecgs to file
+    os.makedirs(processedecgpath, exist_ok=True)
+    np.save(os.path.join(processedecgpath, "all_ecgs_strip2.npy"), all_ecgs)
+    np.save(os.path.join(processedecgpath, "all_names_strip2.npy"), all_names)
+
+
+    # # Process subseq dataset
+    print("Begin create subsequences...")
+    T = all_ecgs.shape[1]                                                         # bc its been transposed
+    subseq_size= 2500
+    all_ecgs_subseq = np.stack(np.split(all_ecgs[:, :subseq_size * (T // subseq_size), :], (T // subseq_size), 1), axis=1)
+    all_ecgs_subseq = np.reshape(all_ecgs_subseq, (-1, all_ecgs_subseq.shape[2], all_ecgs_subseq.shape[3]))
+    all_names_subseq = np.repeat(all_names, (T // subseq_size))
+    print("All ECG subseq: ", all_ecgs_subseq.shape)
+    np.save(os.path.join(processedecgpath, "all_names_subseq_strip2.npy"), all_names_subseq)
+    np.save(os.path.join(processedecgpath, "all_ecgs_subseq_strip2.npy"), all_ecgs_subseq)
+    print("========= SAVE DATASET DONE ===========")
+
 
 def preprocess_ECGdata(ecgpath="data/ecg_clustering", processedecgpath="data/ecg_clustering/processed", reprocess=False, change_resolution = False):
     # if os.path.exists(processedecgpath) and reprocess == False:
@@ -92,6 +169,66 @@ def preprocess_ECGdata(ecgpath="data/ecg_clustering", processedecgpath="data/ecg
     np.save(os.path.join(processedecgpath, "all_ecgs_subseq.npy"), all_ecgs_subseq)
     print("========= SAVE DATASET DONE ===========")
 
+def preprocess_ECG(ecgpath="data/ecg_clustering", processedecgpath="data/ecg_clustering/processed", reprocess=False, change_resolution = False):
+    # if os.path.exists(processedecgpath) and reprocess == False:
+    #     print("ECG data has already been processed")
+    #     return
+    
+    print("Processing ECG files ...")
+    # code from https://github.com/Seb-Good/deepecg and https://github.com/sanatonek/TNC_representation_learning
+    record_ids = RECORD_IDS
+    all_ecgs = []
+    all_names = []
+
+    # Loop through records to create ecgs and labels
+    for record_id in sorted(record_ids):
+        # Import recording and annotations
+        record_path = os.path.join(ecgpath,"mit-bih-noise-stress-test-database-1.0.0", record_id)
+        record = wfdb.rdrecord(record_path)
+        waveform = record.__dict__['p_signal']
+
+        # Resample waveform
+        fs = record.fs 
+        if fs != SAMPLING_RATE:
+            num_samples = int(waveform.shape[0] * (SAMPLING_RATE / fs))  
+            waveform = resample(waveform, num_samples)
+
+        # Apply filters
+        filtered_waveform = butter_bandpass_filter(waveform)
+        
+        # Normalize
+        filtered_waveform = filtered_waveform - np.mean(filtered_waveform, axis=0)
+        filtered_waveform = filtered_waveform / np.std(filtered_waveform, axis=0)
+
+        all_ecgs.append(filtered_waveform[:,:].T)
+        all_names.append(record_id)
+ 
+    all_names = np.array(all_names)
+    signal_lens = [sig.shape[1] for sig in all_ecgs]
+    all_ecgs = np.array([sig[:,:min(signal_lens)] for sig in all_ecgs]) # lay lai cung mot do dai nho nhat
+
+    # Normalize ecgs and changes it to be batch, time, channel
+    all_ecgs = denoiseECG(all_ecgs) 
+    print("Denoise and Normalize completed!")
+
+    # # Save ecgs to file
+    os.makedirs(processedecgpath, exist_ok=True)
+    np.save(os.path.join(processedecgpath, "ecgs_00_119.npy"), all_ecgs)
+    np.save(os.path.join(processedecgpath, "names_00_119.npy"), all_names)
+
+# #+++++++++++++++++++++++++++++++++TO DO HERE+++++++++++++++++++++++++++ 
+
+    # # Process subseq dataset
+    print("Begin create subsequences...")
+    T = all_ecgs.shape[1]                                                         # bc its been transposed
+    subseq_size= 2500
+    all_ecgs_subseq = np.stack(np.split(all_ecgs[:, :subseq_size * (T // subseq_size), :], (T // subseq_size), 1), axis=1)
+    all_ecgs_subseq = np.reshape(all_ecgs_subseq, (-1, all_ecgs_subseq.shape[2], all_ecgs_subseq.shape[3]))
+    all_names_subseq = np.repeat(all_names, (T // subseq_size))
+    print(all_ecgs_subseq.shape)
+    np.save(os.path.join(processedecgpath, "names_subseq_00_119.npy"), all_names_subseq)
+    np.save(os.path.join(processedecgpath, "ecgs_subseq_00_119.npy"), all_ecgs_subseq)
+    print("========= SAVE DATASET 00 DONE ===========")
 
 def denoiseECG(data, hz=250):
     data_filtered = np.empty(data.shape)
