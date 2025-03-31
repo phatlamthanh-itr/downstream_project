@@ -53,6 +53,44 @@ def reduce_dimensions(data, out_dim, model_reduce = REDUCE_DIMENSIONS):
         np.save(os.path.join(PATH_SAVE_DATA_REDUCED, "reduced_data_umap.npy"), reduced_data)
         return reduced_data
 
+def plot_ecg_data(ecg_data, sampling_rate=250, title="ECG Data", xlabel="Time (s)", ylabel="Amplitude"):
+    """
+    Vẽ tín hiệu ECG với dữ liệu có dạng (n_samples, 2).
+    
+    Parameters:
+      ecg_data: numpy array có shape (n_samples, 2) với n_samples là số điểm và 2 là số kênh.
+      sampling_rate: Tần số lấy mẫu (Hz). Mặc định là 500.
+      title: Tiêu đề của toàn bộ figure.
+      xlabel: Nhãn trục x (áp dụng cho biểu đồ phía dưới).
+      ylabel: Nhãn trục y (áp dụng cho từng biểu đồ).
+    """
+    if ecg_data.ndim != 2 or ecg_data.shape[1] != 2:
+        raise ValueError(f"Dữ liệu phải có dạng (n_samples, 2) | {ecg_data.shape}")
+    
+    n_samples = ecg_data.shape[0]
+    time_axis = np.linspace(0, n_samples / sampling_rate, n_samples)
+    
+    # Tạo figure với 2 subplot chia theo hàng
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(10, 8), sharex=True)
+    
+    # Vẽ Channel 1 trên subplot đầu tiên (phía trên)
+    axes[0].plot(time_axis, ecg_data[:, 0], label="Channel 1", color="blue")
+    axes[0].set_title("Channel 1")
+    axes[0].set_ylabel(ylabel)
+    axes[0].grid(True)
+    axes[0].legend()
+    
+    # Vẽ Channel 2 trên subplot thứ hai (phía dưới)
+    axes[1].plot(time_axis, ecg_data[:, 1], label="Channel 2", color="red")
+    axes[1].set_title("Channel 2")
+    axes[1].set_xlabel(xlabel)
+    axes[1].set_ylabel(ylabel)
+    axes[1].grid(True)
+    axes[1].legend()
+    
+    fig.suptitle(title)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
 
 def plot_clustering(data, labels, title='Clustering visualization with t-SNE'):
     reduced_data = reduce_dimensions(data, out_dim=2)
@@ -63,7 +101,8 @@ def plot_clustering(data, labels, title='Clustering visualization with t-SNE'):
     # Tạo colormap dựa trên số lượng cụm
     # colors = plt.cm.get_cmap('tab10', n_clusters)
     colors = ['blue', 'red']
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
+    # plt.figure(figsize=(8, 6))
     # Vẽ từng cụm với màu sắc riêng
     for i, label in enumerate(unique_labels):
         cluster_points = reduced_data[labels == label]
@@ -75,6 +114,21 @@ def plot_clustering(data, labels, title='Clustering visualization with t-SNE'):
     plt.ylabel('t-SNE Component 2')
     plt.legend()
     plt.grid(True)
+
+    def on_click(event):
+        if event.inaxes is not None:
+            x_click, y_click = event.xdata, event.ydata
+            # Tính khoảng cách từ điểm click đến tất cả các điểm trong không gian reduced_data
+            distances = np.sqrt((reduced_data[:, 0] - x_click)**2 + (reduced_data[:, 1] - y_click)**2)
+            idx = np.argmin(distances)
+            print(f"Clicked on point index {idx}")
+            # Gọi plot_ecg_data với dữ liệu ECG gốc của mẫu được chọn
+            subseq = np.load("./data/ecg_clustering/processed/all_ecgs_subseq_strip2.npy")
+            plot_ecg_data(subseq[idx][:, [0,1]], title=f"ECG for sample {idx}")
+    
+    # Kết nối sự kiện click với figure clustering
+    fig.canvas.mpl_connect("button_press_event", on_click)
+
     plt.show()
 
 def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/", k = None, reencode = False):
@@ -127,6 +181,7 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
     score = silhouette_score(data_encoded, labels)
     print("Silhouette Score:", score)
     plot_clustering(data=data_encoded, labels=labels)
+    
 
 
 
