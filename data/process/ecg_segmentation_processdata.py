@@ -17,9 +17,9 @@ def main():
 
 
 def downloadextract_ECGfiles(zippath="data/ecg.zip", targetpath="data/ecg_segmentation", redownload=False):
-    # if os.path.exists(targetpath) and redownload == False:
-    #     print("ECG files already exist")
-    #     return
+    if os.path.exists(targetpath) and redownload == False:
+        print("ECG files already exist")
+        return
 
     link = "https://physionet.org/static/published-projects/mitdb/mit-bih-arrhythmia-database-1.0.0.zip"
     print("Downloading ECG files (440 MB) ...")
@@ -45,8 +45,6 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
     all_names = []
     # Loop through records to create ecgs and labels
     for record_id in sorted(record_ids):
-        
-        # Import recording and annotations
         record_path = os.path.join(ecgpath,"mit-bih-arrhythmia-database-1.0.0", record_id)
         record = wfdb.rdrecord(record_path)
         waveform = record.__dict__['p_signal']
@@ -59,14 +57,34 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
             waveform, resampled_ann = resample_multichan(waveform, annotation, fs, SAMPLING_RATE)
             labels = resampled_ann.symbol
             sample = resampled_ann.sample
+
+
         # Apply filters
-        filtered_waveform = butter_bandpass_filter(waveform)
+        filtered_waveform = butter_bandpass_filter(waveform, order = 2)
+        # Denoise for one-recording---------------
+        # filtered_waveform = denoiseECG_single(filtered_waveform, SAMPLING_RATE)
+
+        # --calculate First derivative (optional)
+        # first_derivative = np.diff(filtered_waveform, axis=0, prepend=filtered_waveform[0:1]) * SAMPLING_RATE
+        # second_derivative = np.diff(first_derivative, axis=0, prepend=first_derivative[0:1]) * SAMPLING_RATE
+        # filtered_waveform = -first_derivative
+        # # filtered_waveform = -second_derivative
         
-        # Normalize
-        filtered_waveform = filtered_waveform - np.mean(filtered_waveform, axis=0)
-        filtered_waveform = filtered_waveform / np.std(filtered_waveform, axis=0)
+        # ------------Testing -----------------
+        # check_range = [[100, 500], [500, 1000], [1000, 1500], [1500, 2000], [2000, 2500]]
+        # plt.plot(waveform[check_range[2][0]:check_range[2][1], 0])
+        # plt.plot(filtered_waveform[1000:1500, 0], color = 'green')
+        # filtered_waveform = butter_bandpass_filter(inv_first_derivative)
+        # plt.plot(filtered_waveform[check_range[2][0]:check_range[2][1], 0], color = 'purple')
+        # plt.show()
+        # exit()
+
+
+        # # # Normalize for one recording (optional - already have at denoiseECG function) 
+        # filtered_waveform = filtered_waveform - np.mean(filtered_waveform, axis=0)
+        # filtered_waveform = filtered_waveform / np.std(filtered_waveform, axis=0)
         
-        # Create labels
+        # ---------Create labels-------------------
         padded_labels = np.zeros(len(waveform))
         for i,l in enumerate(labels):
             if i==len(labels)-1:
@@ -74,15 +92,13 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
             else:
                 padded_labels[sample[i] - OFFSET_SAMPLE // 2: sample[i] + OFFSET_SAMPLE // 2] = is_beat(l)
 
-        # padded_labels = padded_labels[sample[0]:]
-        # Post-processing (make sure min_distance between two peaks greater than 0.4 s)
-        # padded_labels = enforce_min_spacing(padded_labels=padded_labels, min_distance=round(0.4 * SAMPLING_RATE))
         
         # Plot ECG (optional)
-        # check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000], [250000, 300000]]
-        # for range in check_ranges:
-        #     print("Plotting ECG for " + record_id, range)
-        #     plot_ecg_predictions(filtered_waveform=filtered_waveform[range[0]:range[1],:], val_labels=padded_labels[range[0]:range[1]], val_predictions=padded_labels[range[0]:range[1]], record_id=record_id)
+        # if record_id == '222':
+        #     check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000], [250000, 300000]]
+        #     for range in check_ranges:
+        #         print("Plotting ECG for " + record_id, range)
+        #         plot_ecg_predictions(filtered_waveform=filtered_waveform[range[0]:range[1],:], val_labels=padded_labels[range[0]:range[1]], val_predictions=padded_labels[range[0]:range[1]], record_id=record_id)
         
         all_labels.append(padded_labels)
         all_ecgs.append(filtered_waveform[:,:].T)
@@ -90,7 +106,6 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
 
     all_names = np.array(all_names)
     signal_lens = [sig.shape[1] for sig in all_ecgs]
-    # label_lens = [label.shape[0] for label in all_labels]
     all_ecgs = np.array([sig[:,:min(signal_lens)] for sig in all_ecgs])
     all_labels = np.array([label[:min(signal_lens)] for label in all_labels])
     
@@ -103,8 +118,7 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
     val_labels = np.array([all_labels[idx] for idx, record_id in enumerate(all_names) if int(record_id) in DS_EVAL])    
     val_names = np.array([[record_id for idx, record_id in enumerate(all_names) if int(record_id) in DS_EVAL]])
 
-
-    # Normalize ecgs aand changes it to be batch,time, channel
+    # Normalize ecgs aand changes it to be batch,time, channel   -- Denoise and Normalize for the whole dataset
     train_data, val_data = denoiseECG(train_data), denoiseECG(val_data)
     print("Denoise and Normalize completed!")
 
@@ -119,8 +133,6 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
     np.save(os.path.join(processedecgpath, "val_labels.npy"), val_labels)
     np.save(os.path.join(processedecgpath, "val_names.npy"), val_names)
 
-# #+++++++++++++++++++++++++++++++++TO DO HERE+++++++++++++++++++++++++++ 
-
     # # Process subseq dataset
     T = train_data.shape[1]                                                         # bc its been transposed
     subseq_size= 2500
@@ -134,13 +146,12 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
 
     # Split into 0.125s chunks
     if change_resolution:
-        # train_labels = change_resolution_labels(train_labels, NUM_SAMPLES_PER_FRAME)
         train_labels = change_resolution_labels_with_peaks(train_data, train_labels, NUM_SAMPLES_PER_FRAME)
 
     label_sq_size = train_labels.shape[1]
 
     np.save(os.path.join(processedecgpath, 'train_data_subseq.npy'), train_data)
-    np.save(os.path.join(processedecgpath, f'train_labels_subseq_{label_sq_size}.npy'), train_labels)
+    np.save(os.path.join(processedecgpath, 'train_labels_subseq.npy'), train_labels)
     np.save(os.path.join(processedecgpath, "train_names_subseq.npy"), train_names)
 
     T = val_data.shape[1]
@@ -151,84 +162,45 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
     val_names = np.repeat(val_names, (T // subseq_size))
 
 
-    # val_labels = change_resolution_labels_with_peaks(val_data,val_labels, NUM_SAMPLES_PER_FRAME=NUM_SAMPLES_PER_FRAME)
-    if change_resolution:
-        # val_labels = change_resolution_labels(val_labels, NUM_SAMPLES_PER_FRAME)
+    if change_resolution:   
         val_labels = change_resolution_labels_with_peaks(val_data, val_labels, NUM_SAMPLES_PER_FRAME=NUM_SAMPLES_PER_FRAME)
     label_sq_size = val_labels.shape[1]
 
     np.save(os.path.join(processedecgpath, "val_data_subseq.npy"), val_data)
-    np.save(os.path.join(processedecgpath, f'val_labels_subseq_{label_sq_size}.npy'), val_labels)
+    np.save(os.path.join(processedecgpath, "val_labels_subseq.npy"), val_labels)
     np.save(os.path.join(processedecgpath, "val_names_subseq.npy"), val_names)
 
 
     print("========= SAVE DATASET DONE ===========")
 
 
-def plot_ecg_predictions(filtered_waveform, val_predictions, val_labels, record_id, sample_rate=250, num_seconds=10):
+def denoiseECG_single(data, hz=250):
+
     """
-    Plots filtered ECG waveform, predictions, and labels, marking peaks in predicted beats.
- 
+    Denoise ECG for one recording
+    Parameters:
+        data (np.array): 2D numpy array (time x channels)
+    
+    Returns:
+        np.array: Normalized and denoised ECG signal.
     """
-    num_samples = num_seconds * sample_rate
-    time_axis = np.linspace(0, num_seconds, num_samples)
-
-    # Get the first channel only
-    ecg_signal = filtered_waveform[:num_samples, 0]
-    predictions = val_predictions[:num_samples]
-    labels = val_labels[:num_samples]
-
-    labels_peaks = get_peaks(ecg_signal, labels)
-    predictions_peaks = get_peaks(ecg_signal, predictions)
-
-    fig, axs = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
-
-    # Plot ECG waveform
-    axs[0].plot(time_axis, ecg_signal, color='black', label="Filtered ECG")
-    axs[0].scatter(np.array(labels_peaks) / sample_rate, ecg_signal[labels_peaks], color='red', marker='o', label="Label Peaks")
-    axs[0].scatter(np.array(predictions_peaks) / sample_rate, ecg_signal[predictions_peaks], color='green', marker='x', label="Predicted Peaks")
-    axs[0].set_ylabel("ECG Signal")
-    axs[0].legend()
-
-    # Plot Ground Truth Labels
-    axs[1].plot(time_axis, labels, color='blue', linestyle='dashed', label="True Labels")
-    axs[1].scatter(np.array(labels_peaks) / sample_rate, np.ones(len(labels_peaks)), color='red', marker='o', label="Label Peaks")
-    axs[1].set_ylabel("True Labels (0/1)")
-    axs[1].legend()
-
-    # Plot Model Predictions
-    axs[2].plot(time_axis, predictions, color='red', linestyle='dotted', label="Predictions")
-    axs[2].scatter(np.array(predictions_peaks) / sample_rate, np.ones(len(predictions_peaks)), color='green', marker='x', label="Predicted Peaks")
-    axs[2].set_ylabel("Predictions (0/1)")
-    axs[2].set_xlabel("Time (seconds)")
-    axs[2].legend()
-
-    plt.suptitle(f"ECG Signal, Labels, and Predictions for Record {record_id}", fontsize=16)
-
-    plt.tight_layout()
-    plt.show()
-
-def get_peaks(ecg_signal, preferences):
-    """
-    Get the position of peak or prediction or labels
-    """
-    peaks = []
-    in_peak = False
-    for i in range(len(preferences)):
-        if preferences[i] == 1:
-            if not in_peak:
-                start = i  # Start of a detected beat
-                in_peak = True
-            # Find max within detected 1s
-            if i == len(preferences) - 1 or preferences[i + 1] == 0:
-                peak_idx = start + np.argmax(ecg_signal[start:i+1])     # Peak index --> With max absolute value
-                peaks.append(peak_idx)
-                in_peak = False
-
-    return peaks
+    data_filtered = np.empty(data.shape)
+    
+    for c in range(data.shape[1]):
+        data_filtered[:, c] = nk.ecg_clean(data[:, c], sampling_rate=hz)
+    
+    # Normalize
+    feature_means = np.mean(data_filtered, axis=0)
+    feature_std = np.std(data_filtered, axis=0)
+    data_normalized = (data_filtered - feature_means) / feature_std
+    data_normalized = data_filtered
+    return data_normalized
 
 
 def denoiseECG(data, hz=250):
+    """
+    Denoise and Normalize ECG (for the whole dataset)
+    """
     data_filtered = np.empty(data.shape)
     for n in range(data_filtered.shape[0]):
         for c in range(data.shape[1]):

@@ -65,10 +65,10 @@ def change_resolution_labels(tensor, NUM_SAMPLES_PER_FRAME):
     return np.array(new_tensor)
 
 
-def butter_bandpass(lowcut=4, highcut=50, fs=250, order=2):
+def butter_bandpass(lowcut=5, highcut=50, fs=250, order=3):
     return butter(order, [lowcut, highcut], fs=fs, btype='band')
 
-def butter_bandpass_filter(data, lowcut=4, highcut=50, fs=250, order=2):
+def butter_bandpass_filter(data, lowcut=5, highcut=50, fs=250, order=3):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
@@ -137,3 +137,67 @@ def plot_waveform(waveform, filtered_waveform, fs=250, title="ECG Signal Before 
     plt.legend()
     plt.grid()
     plt.show()
+
+
+def plot_ecg_predictions(filtered_waveform, val_predictions, val_labels, record_id, sample_rate=250, num_seconds=10):
+    """
+    Plots filtered ECG waveform, predictions, and labels, marking peaks in predicted beats.
+ 
+    """
+    num_samples = num_seconds * sample_rate
+    time_axis = np.linspace(0, num_seconds, num_samples)
+
+    # Get the first channel only
+    ecg_signal = filtered_waveform[:num_samples, 0]
+    predictions = val_predictions[:num_samples]
+    labels = val_labels[:num_samples]
+
+    labels_peaks = get_peaks(ecg_signal, labels)
+    predictions_peaks = get_peaks(ecg_signal, predictions)
+
+    fig, axs = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+
+    # Plot ECG waveform
+    axs[0].plot(time_axis, ecg_signal, color='black', label="Filtered ECG")
+    axs[0].scatter(np.array(labels_peaks) / sample_rate, ecg_signal[labels_peaks], color='red', marker='o', label="Label Peaks")
+    axs[0].scatter(np.array(predictions_peaks) / sample_rate, ecg_signal[predictions_peaks], color='green', marker='x', label="Predicted Peaks")
+    axs[0].set_ylabel("ECG Signal")
+    axs[0].legend()
+
+    # Plot Ground Truth Labels
+    axs[1].plot(time_axis, labels, color='blue', linestyle='dashed', label="True Labels")
+    axs[1].scatter(np.array(labels_peaks) / sample_rate, np.ones(len(labels_peaks)), color='red', marker='o', label="Label Peaks")
+    axs[1].set_ylabel("True Labels (0/1)")
+    axs[1].legend()
+
+    # Plot Model Predictions
+    axs[2].plot(time_axis, predictions, color='red', linestyle='dotted', label="Predictions")
+    axs[2].scatter(np.array(predictions_peaks) / sample_rate, np.ones(len(predictions_peaks)), color='green', marker='x', label="Predicted Peaks")
+    axs[2].set_ylabel("Predictions (0/1)")
+    axs[2].set_xlabel("Time (seconds)")
+    axs[2].legend()
+
+    plt.suptitle(f"ECG Signal, Labels, and Predictions for Record {record_id}", fontsize=16)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def get_peaks(ecg_signal, preferences):
+    """
+    Get the position of peak or prediction or labels
+    """
+    peaks = []
+    in_peak = False
+    for i in range(len(preferences)):
+        if preferences[i] == 1:
+            if not in_peak:
+                start = i  # Start of a detected beat
+                in_peak = True
+            # Find max within detected 1s
+            if i == len(preferences) - 1 or preferences[i + 1] == 0:
+                peak_idx = start + np.argmax(ecg_signal[start:i+1])     # Peak index --> With max absolute value
+                peaks.append(peak_idx)
+                in_peak = False
+
+    return peaks
