@@ -42,48 +42,48 @@ def post_processing(label_size, pred_path = downstream_config.save_pred_dir, sav
     
     # Load pre-saved validation labels
     try:
-        val_data = np.load(f"{ecgpath}/processed/val_data_subseq.npy")                 # Recover the exact labels without spliting
-        val_labels = np.load(f"{ecgpath}/processed/val_labels_subseq.npy")             # Recover the exact labels without spliting
-        val_names =  np.load(f"{ecgpath}/processed/val_names_subseq.npy")
-        val_predictions = np.load(f"{pred_path}/val_predictions.npy")
+        val_data = np.load(f"{ecgpath}/processed/val_data_subseq.npy")                      # Recover validation subseq waveform
+        val_labels = np.load(f"{ecgpath}/processed/val_labels_subseq.npy")                  # Recover validation subseq labels
+        val_names =  np.load(f"{ecgpath}/processed/val_names_subseq.npy")                   
+        val_predictions = np.load(f"{pred_path}/val_predictions.npy")               
     except:
         raise Exception("Validation labels not found")
 
-   
+    # Change to (n_patients, min(len(waveform)), 2)
     val_data = val_data.reshape(len(DS_EVAL), -1, 2)
-    val_labels = val_labels.reshape(len(DS_EVAL), -1)
+    val_labels = val_labels.reshape(len(DS_EVAL), -1)       # Change to (n_patents, min_len(waveform))
     if label_size == 2500:
         val_predictions = val_predictions.reshape(len(DS_EVAL), -1)     # (patent, min(len(waveform)))
     else:
         val_predictions = reconstruct(val_predictions=val_predictions)
 
     for waveform, label, pred, name in zip(val_data, val_labels, val_predictions, np.unique(val_names)):
-        #Enforcing minimum space between peaks
         # if name not in ['231','222','105']: continue
-        # pred = enforce_min_spacing(pred, min_distance=50)
-        # if visualize:
+        # pred = enforce_min_spacing(pred, min_distance=85)   
+        # # if visualize:
         # check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000]]
         # for range in check_ranges:
         #     print("Plotting ECG for ", name, range)
         #     predict_range = np.zeros_like(label[range[0]:range[1]])
-        #     predictions_peaks = filter_peaks(sorted(get_peaks(ecg_signal=waveform, preferences=pred[range[0]:range[1]])))
-        #     predict_range[predictions_peaks] = 1
-        #     plot_ecg_predictions_random(filtered_waveform=waveform[range[0]:range[1], :], val_labels=label[range[0]:range[1]], val_predictions=filter_large_ones(pred[range[0]:range[1]], min_size=10), record_id=name, num_seconds=10)
-        # exit()
+        #     # predictions_peaks = filter_peaks(sorted(get_peaks(ecg_signal=waveform, preferences=pred[range[0]:range[1]])))
+        #     # predict_range[predictions_peaks] = 1
+        #     plot_ecg_predictions_random(filtered_waveform=waveform[range[0]:range[1], :], val_labels=label[range[0]:range[1]], val_predictions=pred[range[0]:range[1]], record_id=name, num_seconds=10)
 
         # Extract peaks
         labels_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=label))
-        # predictions_peaks = sorted(filter_peaks(get_peaks(ecg_signal=waveform, preferences=pred), min_distance = 20))
-        predictions_filtered = filter_large_ones(pred, min_size=10)
-        predictions_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=predictions_filtered))
 
-        # Rescale peaks to original sampling rate
+        # Prediction post-processing
+    
+        predictions_filtered = filter_large_ones(pred, min_size=15)     # Filter out 1's noise 
+        predictions_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=predictions_filtered))  # Get peaks positions
+        predictions_peaks = filter_peaks(predictions_peaks, min_distance=50)            # Ensure no two peaks are too close 
+
+
+        # Rescale peaks to original sampling rate  (250 --> 360Hz) for creating annotation
         labels_peaks_rescaled = rescale_peaks(labels_peaks, FS_ORG, SAMPLING_RATE)
         predictions_peaks_rescaled = rescale_peaks(predictions_peaks, FS_ORG, SAMPLING_RATE)
 
-
         total_symbol_rescaled = ['N' for _ in predictions_peaks_rescaled]
-
         annotation_filepath = os.path.join(save_beat_dir, f"{name}.beat")
         curr_dir = os.getcwd()
         os.chdir(save_beat_dir)

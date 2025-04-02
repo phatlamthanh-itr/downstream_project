@@ -62,12 +62,12 @@ def preprocess_ECGdata(ecgpath="data/ecg_segmentation", processedecgpath="data/e
         # Apply filters
         filtered_waveform = butter_bandpass_filter(waveform, order = 2)
         # Denoise for one-recording---------------
-        # filtered_waveform = denoiseECG_single(filtered_waveform, SAMPLING_RATE)
+        filtered_waveform = denoiseECG_single(filtered_waveform, SAMPLING_RATE)
 
         # --calculate First derivative (optional)
-        # first_derivative = np.diff(filtered_waveform, axis=0, prepend=filtered_waveform[0:1]) * SAMPLING_RATE
+        first_derivative = np.diff(filtered_waveform, axis=0, prepend=filtered_waveform[0:1]) * SAMPLING_RATE
         # second_derivative = np.diff(first_derivative, axis=0, prepend=first_derivative[0:1]) * SAMPLING_RATE
-        # filtered_waveform = -first_derivative
+        filtered_waveform = -first_derivative
         # # filtered_waveform = -second_derivative
         
         # ------------Testing -----------------
@@ -190,9 +190,9 @@ def denoiseECG_single(data, hz=250):
         data_filtered[:, c] = nk.ecg_clean(data[:, c], sampling_rate=hz)
     
     # Normalize
-    feature_means = np.mean(data_filtered, axis=0)
-    feature_std = np.std(data_filtered, axis=0)
-    data_normalized = (data_filtered - feature_means) / feature_std
+    # feature_means = np.mean(data_filtered, axis=0)
+    # feature_std = np.std(data_filtered, axis=0)
+    # data_normalized = (data_filtered - feature_means) / feature_std
     data_normalized = data_filtered
     return data_normalized
 
@@ -215,6 +215,7 @@ def denoiseECG(data, hz=250):
     data = np.transpose(data, (0,2,1))
 
     return data
+
 
 def download_file(url, filename):
     """
