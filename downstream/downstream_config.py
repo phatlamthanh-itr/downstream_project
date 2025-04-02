@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from downstream.downstream_loss import CombinedBCEDiceLoss, DiceLoss
+from downstream.downstream_loss import CombinedBCEDiceLoss, DiceLoss, BCELoss
 
 class DownStream_ExpConfig():
     def __init__(self, 
@@ -40,7 +40,9 @@ class DownStream_ExpConfig():
         self.seed = seed
         self.device = None
         self.input_dims = None
-        self.loss = CombinedBCEDiceLoss(alpha=0.5)
+        self.loss = CombinedBCEDiceLoss(alpha=0.7)
+        # self.loss = DiceLoss()
+        # self.loss = BCELoss()
         os.makedirs(run_dir, exist_ok=True)
         os.makedirs(save_pred_dir, exist_ok=True)
         os.makedirs(log_dir, exist_ok=True)
@@ -68,7 +70,7 @@ downstream_config = DownStream_ExpConfig(
         num_layers=1,
         hidden_dim = 32,
         output_size = 80,
-        epochs = 20,
+        epochs = 15,
         lr = 0.01,
         batch_size = 32,
         save_epochfreq = 10,

@@ -24,7 +24,6 @@ def plot_ecg_predictions(filtered_waveform, val_predictions, val_labels, record_
     labels_peaks = get_peaks(ecg_signal, labels)
     predictions_peaks = get_peaks(ecg_signal, predictions)
 
-
     fig, axs = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
 
     # Plot ECG waveform
@@ -53,7 +52,7 @@ def plot_ecg_predictions(filtered_waveform, val_predictions, val_labels, record_
 
 def plot_ecg_predictions_random(filtered_waveform, val_predictions, val_labels, record_id, sample_rate=250, num_seconds=10):
     """
-    Plots filtered ECG waveform, predictions, and labels
+    Plots filtered ECG waveform, predictions, and labels, with random time range
     """
     total_samples = min(len(filtered_waveform), len(val_predictions), len(val_labels))
     num_samples = num_seconds * sample_rate
@@ -165,3 +164,54 @@ def get_peaks(ecg_signal, preferences):
                 in_peak = False
 
     return peaks
+
+
+def filter_peaks(peaks, min_distance=45):
+    """
+    Filter out peaks that are too close after get_peaks
+    Args: 
+    - peaks: list of peaks position from get_peaks()
+    """
+    if not peaks:
+        return []
+    
+    filtered_peaks = [peaks[0]]
+    
+    for i in range(1, len(peaks)):
+        if peaks[i] - filtered_peaks[-1] >= min_distance:
+            filtered_peaks.append(peaks[i])
+        else:
+            filtered_peaks[-1] = peaks[i]
+    
+    return filtered_peaks
+
+
+def filter_large_ones(arr, min_size=20):
+    """
+    Filter, keep the series of 1s with the size larger than min_size --> To filter out 1's noise series from prediction
+    """  
+    arr = np.array(arr)
+    
+    # Find all sequences of consecutive 1s
+    one_segments = []
+    start = None
+    
+    for i in range(len(arr)):
+        if arr[i] == 1 and start is None:
+            start = i
+        elif arr[i] == 0 and start is not None:
+            one_segments.append((start, i - 1))
+            start = None
+    
+    if start is not None:
+        one_segments.append((start, len(arr) - 1))
+    
+    # Create output array
+    output = np.zeros_like(arr)
+    
+    # Keep only segments larger than min_size
+    for seg_start, seg_end in one_segments:
+        if (seg_end - seg_start + 1) >= min_size:
+            output[seg_start:seg_end + 1] = 1
+    
+    return output.tolist()

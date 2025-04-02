@@ -7,14 +7,14 @@ import numpy as np
 class DiceLoss(nn.Module):
     def __init__(self, smooth=1.0):
         super(DiceLoss, self).__init__()
-        self.smooth = smooth  # To avoid division by zero
+        self.smooth = smooth                    # To avoid division by zero
 
     def forward(self, preds, targets):
         """
             preds:, shape (batch, time_step)
             targets: Ground truth labels (0 or 1), shape (batch, time_step)
         """
-        preds = torch.sigmoid(preds)  # Convert logits to probabilities
+        preds = torch.sigmoid(preds)                # Convert logits to probabilities
         
         intersection = (preds * targets).sum(dim=1)  
         union = preds.sum(dim=1) + targets.sum(dim=1)
@@ -68,4 +68,12 @@ class CombinedBCEDiceLoss(nn.Module):
         bce_loss = self.bce(preds, targets)
         dice_loss = self.dice(preds, targets)
         return self.alpha * bce_loss + (1 - self.alpha) * dice_loss
-    
+
+
+class BCELoss(nn.Module):
+    def __init__(self):
+        super(BCELoss, self).__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+
+    def forward(self, inputs, targets):
+        return self.bce(inputs, targets)

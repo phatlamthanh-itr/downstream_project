@@ -252,7 +252,7 @@ class ResNet1D(nn.Module):
             out = self.first_block_bn(out)
         out = self.first_block_relu(out)
         
-        # # residual blocks, every block has two conv
+        # Residual blocks, every block has two conv
         for i_block in range(self.n_block):
             net = self.basicblock_list[i_block]
             if self.verbose:
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     input_dim = 320
     x = torch.randn(batch_size, input_dim, seq_length)
 
-    model = ResNet1D(in_channels=input_dim, base_filters=32, kernel_size=3, stride=1, groups=1, n_block=4, n_classes=2, verbose=True)
+    model = ResNet1D(in_channels=input_dim, base_filters=80, kernel_size=3, stride=1, groups=1, n_block=4, n_classes=2, verbose=True)
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     output = model(x)
     print(output.shape)
