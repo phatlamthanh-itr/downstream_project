@@ -14,7 +14,7 @@ from scipy.signal import resample
 def main():
     # the repo designed to have files live in /rebar/data/ecg/
     downloadextract_ECGfiles()
-    # preprocess_ECGdata(change_resolution=False)
+    preprocess_ECGdata(change_resolution=False)
     # preprocess_ECG(change_resolution=False)
     preprocess_ECG_from_strip2()
 
