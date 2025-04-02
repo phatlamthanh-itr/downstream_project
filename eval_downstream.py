@@ -13,7 +13,7 @@ from downstream.downstream_nets import LSTMDecoder, TransformerDecoder, LSTMDeco
 from downstream.trainer import train_model
 from data.process.dataset_config import SAMPLING_RATE, DS_EVAL, NUM_SAMPLES_PER_FRAME, FS_ORG
 from data.process.preprocessing import enforce_min_spacing
-from downstream.utils import plot_ecg_predictions, plot_ecg_predictions_random, get_peaks, rescale_peaks, reconstruct
+from downstream.utils import plot_ecg_predictions, plot_ecg_predictions_random, get_peaks, rescale_peaks, reconstruct, filter_peaks, filter_large_ones
 
 
 
@@ -50,26 +50,32 @@ def post_processing(label_size, pred_path = downstream_config.save_pred_dir, sav
         raise Exception("Validation labels not found")
 
    
-    val_data = val_data.reshape(len(DS_EVAL), -1)
+    val_data = val_data.reshape(len(DS_EVAL), -1, 2)
     val_labels = val_labels.reshape(len(DS_EVAL), -1)
-
     if label_size == 2500:
         val_predictions = val_predictions.reshape(len(DS_EVAL), -1)     # (patent, min(len(waveform)))
     else:
         val_predictions = reconstruct(val_predictions=val_predictions)
 
     for waveform, label, pred, name in zip(val_data, val_labels, val_predictions, np.unique(val_names)):
-        # Enforcing minimum space between peaks
-        pred = enforce_min_spacing(pred, min_distance=100)
-        if visualize:
-            check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000], [250000, 300000]]
-            for range in check_ranges:
-                print("Plotting ECG for ", name, range)
-                plot_ecg_predictions(filtered_waveform=waveform[range[0]:range[1],:], val_labels=label[range[0]:range[1]], val_predictions=pred[range[0]:range[1]], record_id=name, num_seconds=10)
-        
+        #Enforcing minimum space between peaks
+        # if name not in ['231','222','105']: continue
+        # pred = enforce_min_spacing(pred, min_distance=50)
+        # if visualize:
+        # check_ranges = [[0, 50000], [50000, 100000], [100000, 150000], [150000, 200000], [200000, 250000]]
+        # for range in check_ranges:
+        #     print("Plotting ECG for ", name, range)
+        #     predict_range = np.zeros_like(label[range[0]:range[1]])
+        #     predictions_peaks = filter_peaks(sorted(get_peaks(ecg_signal=waveform, preferences=pred[range[0]:range[1]])))
+        #     predict_range[predictions_peaks] = 1
+        #     plot_ecg_predictions_random(filtered_waveform=waveform[range[0]:range[1], :], val_labels=label[range[0]:range[1]], val_predictions=filter_large_ones(pred[range[0]:range[1]], min_size=10), record_id=name, num_seconds=10)
+        # exit()
+
         # Extract peaks
         labels_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=label))
-        predictions_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=pred))
+        # predictions_peaks = sorted(filter_peaks(get_peaks(ecg_signal=waveform, preferences=pred), min_distance = 20))
+        predictions_filtered = filter_large_ones(pred, min_size=10)
+        predictions_peaks = sorted(get_peaks(ecg_signal=waveform, preferences=predictions_filtered))
 
         # Rescale peaks to original sampling rate
         labels_peaks_rescaled = rescale_peaks(labels_peaks, FS_ORG, SAMPLING_RATE)
@@ -106,23 +112,5 @@ def post_processing(label_size, pred_path = downstream_config.save_pred_dir, sav
 
 
 
-# if __name__ == "__main__":
-#     train_features = np.load("train_features.npy")
-#     val_features = np.load("val_features.npy")
-#     train_labels = np.load("./data/ecg_segmentation/processed/train_labels_subseq.npy")
-#     val_labels = np.load("./data/ecg_segmentation/processed/val_labels_subseq.npy")
-
-#     input_seq_length = train_features.shape[1]
-#     feature_dim = train_features.shape[2]
-
-#     # model = LSTMDecoder(input_seq_length=input_seq_length, input_dim=feature_dim, num_layers=1)
-#     model = LSTMDecoder2500(input_seq_length=input_seq_length, input_dim=feature_dim, num_layers=1)
-
-
-#     train_loader = model.setup_dataloader(data=train_features, label=train_labels, batch_size = downstream_config.batch_size ,train=True)
-#     val_loader = model.setup_dataloader(data=val_features, label=val_labels, batch_size = downstream_config.batch_size, train=False)
-
-#     # train_model(model=model, train_loader=train_loader, train_labels=train_labels, val_loader=val_loader, 
-#     #             val_labels=val_features)
 
 
