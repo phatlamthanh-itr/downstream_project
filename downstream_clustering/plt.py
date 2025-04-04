@@ -14,4 +14,3 @@ waveform = record.__dict__['p_signal']
 
 waveform, flag_get_sample = get_sample_from_hea(record_path, waveform)
 plot_ecg_data(waveform[:, [0, 1]])
-# plot_ecg_data(waveform[:, :])
