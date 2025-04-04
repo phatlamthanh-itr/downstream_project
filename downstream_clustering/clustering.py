@@ -11,14 +11,9 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.svm import OneClassSVM
-# import umap
-# import cuml.accel
-# cuml.accel.install()
-# from cuml.manifold import TSNE as cuTSNE
 import joblib
 from .clustering_config import *
 from downstream_classification.eval import calculate_accuracy, calculate_recall
-
 
 def reduce_dimensions(data, out_dim, model_reduce = REDUCE_DIMENSIONS):
     assert (model_reduce == "TSNE" or model_reduce == "PCA" or model_reduce == "UMAP")
@@ -44,29 +39,8 @@ def reduce_dimensions(data, out_dim, model_reduce = REDUCE_DIMENSIONS):
             reduced_data = data
         np.save(os.path.join(PATH_SAVE_DATA_REDUCED, "reduced_data_pca.npy"), reduced_data)
         return reduced_data
-    
-    # if model_reduce == "UMAP":
-    #     if data.shape[1] > out_dim:
-    #         print("UMAP Reducing dimensions...")
-    #         umap_model = umap.UMAP(n_components=out_dim, random_state=42)
-    #         reduced_data = umap_model.fit_transform(data)
-    #         print(f'Reduced dimensions from {data.shape} dimentions to {reduced_data.shape} dimentions sucessfully!')
-    #     else:
-    #         reduced_data = data
-    #     np.save(os.path.join(PATH_SAVE_DATA_REDUCED, "reduced_data_umap.npy"), reduced_data)
-    #     return reduced_data
 
 def plot_ecg_data(ecg_data, sampling_rate=250, title="ECG Data", xlabel="Time (s)", ylabel="Amplitude"):
-    """
-    Vẽ tín hiệu ECG với dữ liệu có dạng (n_samples, 2).
-    
-    Parameters:
-      ecg_data: numpy array có shape (n_samples, 2) với n_samples là số điểm và 2 là số kênh.
-      sampling_rate: Tần số lấy mẫu (Hz). Mặc định là 500.
-      title: Tiêu đề của toàn bộ figure.
-      xlabel: Nhãn trục x (áp dụng cho biểu đồ phía dưới).
-      ylabel: Nhãn trục y (áp dụng cho từng biểu đồ).
-    """
     if ecg_data.ndim != 2 or ecg_data.shape[1] != 2:
         raise ValueError(f"Dữ liệu phải có dạng (n_samples, 2) | {ecg_data.shape}")
     
@@ -92,53 +66,15 @@ def plot_ecg_data(ecg_data, sampling_rate=250, title="ECG Data", xlabel="Time (s
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-# def plot_clustering(data, label_true, labels_pred, title='Clustering visualization with t-SNE'):
-#     reduced_data = reduce_dimensions(data, out_dim=2)
-    
-#     unique_labels = np.unique(labels_pred)
-#     n_clusters = len(unique_labels)
-
-#     # Tạo colormap dựa trên số lượng cụm
-#     # colors = plt.cm.get_cmap('tab10', n_clusters)
-#     colors = ['blue', 'red']
-#     fig, ax = plt.subplots(figsize=(8, 6))
-#     # plt.figure(figsize=(8, 6))
-
-#     for i, label in enumerate(unique_labels):
-#         cluster_points = reduced_data[labels_pred == label]
-#         plt.scatter(cluster_points[:, 0], cluster_points[:, 1], 
-#                     color=colors[i], label=f'Cluster {label}', alpha=0.6)
-    
-#     plt.title(title)
-#     plt.xlabel('t-SNE Component 1')
-#     plt.ylabel('t-SNE Component 2')
-#     plt.legend()
-#     plt.grid(True)
-
-#     def on_click(event):
-#         if event.inaxes is not None:
-#             x_click, y_click = event.xdata, event.ydata
-#             distances = np.sqrt((reduced_data[:, 0] - x_click)**2 + (reduced_data[:, 1] - y_click)**2)
-#             idx = np.argmin(distances)
-#             print(f"Clicked on point index {idx}")
-#             subseq = np.load("./data/ecg_clustering/processed/ecgs_subseq_6_119.npy")
-#             plot_ecg_data(subseq[idx][:, [0,1]], title=f"ECG for sample {idx}")
-    
-#     fig.canvas.mpl_connect("button_press_event", on_click)
-#     plt.show()
-
 def plot_clustering(data, label_true, labels_pred, title='Clustering visualization with t-SNE'):
-    # Giả sử hàm reduce_dimensions đã được định nghĩa để giảm dữ liệu xuống 2 chiều.
     reduced_data = reduce_dimensions(data, out_dim=2)
     
-    # Tạo các mặt nạ (mask) cho từng trường hợp:
     correct0_mask = (labels_pred == label_true) & (label_true == 0)
     correct1_mask = (labels_pred == label_true) & (label_true == 1)
     incorrect_mask = (labels_pred != label_true)
     
     fig, ax = plt.subplots(figsize=(8, 6))
     
-    # Vẽ các điểm tương ứng với từng mặt nạ:
     if np.sum(correct0_mask) > 0:
         ax.scatter(reduced_data[correct0_mask, 0], reduced_data[correct0_mask, 1],
                    color='blue', label='True label 0 (correct)', alpha=0.6)
@@ -161,7 +97,7 @@ def plot_clustering(data, label_true, labels_pred, title='Clustering visualizati
             distances = np.sqrt((reduced_data[:, 0] - x_click)**2 + (reduced_data[:, 1] - y_click)**2)
             idx = np.argmin(distances)
             print(f"Clicked on point index {idx}")
-            subseq = np.load("./data/ecg_clustering/processed/ecgs_subseq_024_119.npy")
+            subseq = np.load(f"./data/ecg_clustering/processed/{NAME_PTH_FILE}.npy")
             plot_ecg_data(subseq[idx][:, [0, 1]], title=f"ECG for sample {idx}")
     
     fig.canvas.mpl_connect("button_press_event", on_click)
@@ -171,14 +107,8 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
     #Using REBAR model to encode data
     name_pth_file = f"{NAME_PTH_FILE}.pth"
     if CLUSTER_RETRAIN:
-        data_encoded = torch.load(os.path.join(save_path, "encoded_all_202_232.pth"), weights_only=False)
+        data_encoded = torch.load(os.path.join(save_path, name_pth_file), weights_only=False)
         data_encoded = np.max(data_encoded, axis= 1)
-        data_1 = torch.load(os.path.join(save_path, "encoded_all_118_119.pth"), weights_only=False)
-        data_1 = np.max(data_1, axis= 1)
-        data_encoded = np.concatenate((data_encoded, data_1), axis= 0)
-        data_1 = torch.load(os.path.join(save_path, "encoded_all_100_201.pth"), weights_only=False)
-        data_1 = np.max(data_1, axis= 1)
-        data_encoded = np.concatenate((data_encoded, data_1), axis= 0)
         print(f"Load data from path {os.path.join(save_path, name_pth_file)} for retrain successfully!")
     else:
         if reencode or not os.path.exists(os.path.join(save_path, name_pth_file)):
@@ -189,7 +119,7 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
         else:
             print("Loading...")
             data_encoded = torch.load(os.path.join(save_path, name_pth_file), weights_only=False)
-            print("Loaded!")
+            print(f"Loaded from {os.path.join(save_path, name_pth_file)}!")
             data_encoded = np.max(data_encoded, axis= 1) 
         
     # print(data_encoded.shape) (2700, 2500, 320)
@@ -197,10 +127,10 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
     # data_encoded = np.max(data_encoded, axis= 1) # data_encode.shape = (2700, 320)
     scaler = StandardScaler()
     data_encoded = scaler.fit_transform(data_encoded)
-
+    test = True
     if CLUSTER_MODEL == "KMEANS":
-        if CLUSTER_RETRAIN == False and os.path.exists('./experiments/out/cluster/kmeans/clustering_pipeline_trained_118e.pkl'):
-            pipeline = joblib.load('./experiments/out/cluster/kmeans/clustering_pipeline_trained_118e.pkl')
+        if CLUSTER_RETRAIN == False and os.path.exists('./experiments/out/cluster/kmeans/clustering_pipeline_118.pkl'):
+            pipeline = joblib.load('./experiments/out/cluster/kmeans/clustering_pipeline_118.pkl')
             print("Load KMeans model success!")
         else:
             print("Fitting Kmeans model...")
@@ -209,8 +139,9 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
             ])
             pipeline.fit(data_encoded)
             os.makedirs('./experiments/out/cluster/kmeans', exist_ok=True)
-            joblib.dump(pipeline, './experiments/out/cluster/kmeans/clustering_pipeline_trained_118e.pkl')
+            joblib.dump(pipeline, './experiments/out/cluster/kmeans/clustering_pipeline_118.pkl')
             print("Fit and save KMEANs model success")
+            test = False
 
     elif CLUSTER_MODEL == "MINIBATCHKMEANS":
         if CLUSTER_RETRAIN == False and os.path.exists('./experiments/out/cluster/minibatchkmeans/clustering_pipeline.pkl'):
@@ -225,7 +156,8 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
             os.makedirs('./experiments/out/cluster/minibatchkmeans', exist_ok=True)
             joblib.dump(pipeline, './experiments/out/cluster/minibatchkmeans/clustering_pipeline.pkl')
             print("Fit and save MiniBatch KMEANs model success")
-    
+            test = False
+
     elif CLUSTER_MODEL == "SVC":
         if CLUSTER_RETRAIN == False and os.path.exists('./experiments/out/cluster/svc/clustering_pipeline.pkl'):
             pipeline = joblib.load('./experiments/out/cluster/svc/clustering_pipeline.pkl')
@@ -240,17 +172,18 @@ def clustering(rebar_model, data, save_path = "./data/ecg_clustering/processed/"
             joblib.dump(pipeline, './experiments/out/cluster/svc/clustering_pipeline.pkl') 
             print("Fit and save SVC model success")
 
-    print("data plot shape: ", data_encoded.shape)
     labels_predicted = pipeline.predict(data_encoded)
-
+    labels_predicted = 1 - labels_predicted # chuyen 0 -> 1 ; 1 -> 0
     score = silhouette_score(data_encoded, labels_predicted)
     print("Silhouette Score:", score)
-    labels_true = np.zeros(180)
-    for i in range(30, 180, 24):
-        labels_true[i:i+11] = 1
-    print("Accuracy: ", calculate_accuracy(labels_true, labels_predicted))
-    print("Recall: ", calculate_recall(labels_true, labels_predicted))
-    plot_clustering(data=data_encoded, label_true=labels_true, labels_pred=labels_predicted)
+
+    if test:
+        labels_true = np.zeros(180)
+        for i in range(30, 180, 24):
+            labels_true[i:i+11] = 1
+        print("Accuracy: ", calculate_accuracy(labels_true, labels_predicted))
+        print("Recall: ", calculate_recall(labels_true, labels_predicted))
+        plot_clustering(data=data_encoded, label_true=labels_true, labels_pred=labels_predicted)
     
 
 

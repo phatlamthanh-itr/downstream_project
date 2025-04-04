@@ -6,6 +6,7 @@ from experiments.configs.rebar_expconfigs import allrebar_expconfigs
 import argparse
 from utils.utils import printlog, load_data, import_model, init_dl_program
 from downstream_clustering.clustering import clustering
+from downstream_clustering.clustering_config import NAME_PTH_FILE
 all_expconfigs = {**allrebar_expconfigs}
 data_path = "./data/ecg_clustering/processed/"
 save_path = "./data/ecg_clustering/processed"
@@ -29,19 +30,10 @@ if __name__ == "__main__":
         train_data, _, val_data, _, _, _ = load_data(config = config, data_type = "fullts")
         model = import_model(config, train_data=train_data, val_data=val_data)
         model.fit()
-
-    # data1 = np.load(os.path.join(data_path, f"all_ecgs_subseq.npy"), mmap_mode='r')
-    # data2 = np.load(os.path.join(data_path, f"113e00.npy"), mmap_mode='r')
-    # data3 = np.load(os.path.join(data_path, f"201e00.npy"), mmap_mode='r')
-    # data4 = np.load(os.path.join(data_path, f"214e00.npy"),mmap_mode='r')
-    # data5 = np.load(os.path.join(data_path, f"232e00.npy"), mmap_mode='r')
-    # data = np.concatenate((data4, data5), axis=0)
-
-    # print(data.shape)
-    # exit()
     
-    data = np.load(os.path.join(data_path, f"ecgs_subseq_00_119.npy"))
-    data = data[:4000,:, [0, 1]] # chon chanel thu 0 va 1
+    data = np.load(os.path.join(data_path, f"{NAME_PTH_FILE}.npy"))
+    if NAME_PTH_FILE == "all_ecgs_subseq_strip2":
+        data = data[:4000,:, [0, 1]] # chon chanel thu 0 va 1
     config.set_inputdims(data.shape[-1])
     rebar_model = import_model(config, reload_ckpt = True)
     clustering(rebar_model, data= data)

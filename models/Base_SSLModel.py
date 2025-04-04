@@ -79,6 +79,7 @@ class BaseModelClass():
         
         dataset = torch.utils.data.TensorDataset(torch.from_numpy(data).to(torch.float))
         loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=torch.get_num_threads())
+        # loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, num_workers=0)
 
         self.encoder.eval()
         with torch.no_grad():
